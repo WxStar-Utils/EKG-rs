@@ -18,21 +18,25 @@ struct Config {
 async fn main() {
     let mut scheduler = JobScheduler::new().await.unwrap();
 
-
     scheduler.add(
         Job::new_async("0 */5 * * * *", |_uuid, _locked| {
             Box::pin(async move {
-                // Set up the MQTT Broker
-                let mut mqttoptions = MqttOptions::new("rumqtt-sync", "starsrv-db01.cascadia.local", 1883);
+                // Get the current configuration
+                let config_path = "ekg.toml";
+                let config_contents = std::fs::read_to_string(config_path).unwrap();
+                let config : Config = toml::from_str(&config_contents).unwrap();
+
+
+                // Set up the MQTT Broker client connection
+                let mut mqttoptions = MqttOptions::new("ekg-timesync", config.mqtt_host, config.mqtt_port);
                 mqttoptions.set_keep_alive(Duration::from_secs(5));
-                mqttoptions.set_credentials("moon", "intellistar");
+                mqttoptions.set_credentials(config.mqtt_username, config.mqtt_password);
 
                 let (mut client, mut event_loop) = AsyncClient::new(mqttoptions, 10);
 
                 // Get the current NTP timestamp from the pool
-                let pool = "0.pool.ntp.org:123";
                 let response = ntp_client::Client::new()
-                    .target(pool).expect("Failed to target NTP server.")
+                    .target(config.ntp_pool).expect("Failed to target NTP server.")
                     .format(Some("%m/%d/%Y %I:%M:%S.%3f %p"))
                     .request().expect("Failed to request NTP time");
 
